@@ -347,6 +347,18 @@ tbody tr:hover { background: #fafdfb; }
 .tag-admin { background: var(--verde-escuro); color: var(--branco); }
 .tag-inativo { background: #eee; color: #888; }
 
+.marca-chip {
+  display: inline-block;
+  background: var(--verde-claro-2);
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 0.76rem;
+  margin: 1px 2px 1px 0;
+  white-space: nowrap;
+  color: var(--texto);
+}
+
 /* ---------- Filtros / toolbar ---------- */
 .barra-filtros {
   display: flex;

@@ -5,11 +5,6 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const ROOT_DIR = path.join(__dirname, '..');
-const DATA_DIR = path.join(ROOT_DIR, 'data');
-
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
 
 // --- Carrega variaveis de um arquivo .env, se existir (sem dependencias externas) ---
 function loadDotEnv() {
@@ -36,6 +31,15 @@ function loadDotEnv() {
 }
 loadDotEnv();
 
+// DATA_DIR pode ser sobrescrito por uma variavel de ambiente — importante em
+// hospedagens como o Render, onde um disco persistente e montado num caminho
+// fixo (ex.: /var/data) fora da pasta do codigo, que e recriada a cada deploy.
+const DATA_DIR = process.env.DATA_DIR || path.join(ROOT_DIR, 'data');
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
 // --- Segredo usado para assinar os cookies de sessao ---
 // Se nao houver SESSION_SECRET no ambiente, gera um e persiste em disco
 // para que as sessoes nao sejam invalidadas a cada reinicio do servidor.
@@ -55,7 +59,11 @@ const config = {
   timezone: process.env.TZ_NOME || 'America/Sao_Paulo',
   sessionSecret: getSessionSecret(),
   sessionMaxAgeMs: 1000 * 60 * 60 * 12, // 12 horas
-  dbPath: path.join(DATA_DIR, 'ponto.db'),
+  // Connection string do banco Postgres (ex.: gerada gratuitamente em neon.tech).
+  // Os dados de colaboradores e marcacoes de ponto ficam la, nao no disco do
+  // servidor — por isso o Render pode continuar no plano Free sem risco de
+  // perder dados a cada reinicio/novo deploy.
+  databaseUrl: process.env.DATABASE_URL || '',
   adminSeed: {
     nome: process.env.ADMIN_NOME || 'Administrador',
     email: process.env.ADMIN_EMAIL || 'admin@planosemeador.com.br',

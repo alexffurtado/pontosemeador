@@ -1,121 +1,181 @@
 'use strict';
 
-const db = require('./db');
+const { pool } = require('./db');
+const { normalizarLogin } = require('./validation');
+
+function slugFromNome(nome) {
+  const primeiro = String(nome || '').trim().split(/\s+/)[0] || 'usuario';
+  const limpo = normalizarLogin(primeiro).replace(/[^a-z0-9]/g, '');
+  return limpo || 'usuario';
+}
 
 function rowToFuncionarioPublico(row) {
   if (!row) return null;
   const { senha_hash, ...rest } = row;
-  return { ...rest, is_admin: !!row.is_admin, ativo: !!row.ativo };
+  return {
+    ...rest,
+    is_admin: !!row.is_admin,
+    ativo: !!row.ativo,
+    verificar_atraso: row.verificar_atraso === undefined || row.verificar_atraso === null ? true : !!row.verificar_atraso,
+    verificar_saida_antecipada:
+      row.verificar_saida_antecipada === undefined || row.verificar_saida_antecipada === null
+        ? true
+        : !!row.verificar_saida_antecipada,
+  };
 }
 
 const Funcionarios = {
-  porEmail(email) {
-    return db.prepare('SELECT * FROM funcionarios WHERE email = ?').get(String(email).toLowerCase().trim());
+  async porEmail(email) {
+    const { rows } = await pool.query('SELECT * FROM funcionarios WHERE email = $1', [
+      String(email).toLowerCase().trim(),
+    ]);
+    return rows[0] || null;
   },
-  porId(id) {
-    return db.prepare('SELECT * FROM funcionarios WHERE id = ?').get(id);
+  async porLogin(login) {
+    const { rows } = await pool.query('SELECT * FROM funcionarios WHERE login = $1', [normalizarLogin(login)]);
+    return rows[0] || null;
   },
-  listarTodos({ incluirInativos = true } = {}) {
+  async porId(id) {
+    const { rows } = await pool.query('SELECT * FROM funcionarios WHERE id = $1', [id]);
+    return rows[0] || null;
+  },
+  // Gera um login unico (ex.: "joao", "joao2", ...) a partir do nome. Usado
+  // quando o admin cria/edita um colaborador sem informar um login manualmente.
+  async gerarLoginUnico(nome, excluirId = null) {
+    const base = slugFromNome(nome);
+    let candidato = base;
+    let sufixo = 2;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const existente = await this.porLogin(candidato);
+      if (!existente || (excluirId != null && existente.id === excluirId)) return candidato;
+      candidato = `${base}${sufixo}`;
+      sufixo += 1;
+    }
+  },
+  async listarTodos({ incluirInativos = true } = {}) {
     const sql = incluirInativos
       ? 'SELECT * FROM funcionarios ORDER BY ativo DESC, nome ASC'
-      : 'SELECT * FROM funcionarios WHERE ativo = 1 ORDER BY nome ASC';
-    return db.prepare(sql).all();
+      : 'SELECT * FROM funcionarios WHERE ativo = TRUE ORDER BY nome ASC';
+    const { rows } = await pool.query(sql);
+    return rows;
   },
-  criar(dados) {
-    const stmt = db.prepare(`
-      INSERT INTO funcionarios
-        (nome, email, senha_hash, cargo, is_admin, ativo, jornada_entrada, jornada_saida, carga_horaria_diaria_minutos, tolerancia_minutos, dias_trabalho)
-      VALUES (@nome, @email, @senha_hash, @cargo, @is_admin, @ativo, @jornada_entrada, @jornada_saida, @carga_horaria_diaria_minutos, @tolerancia_minutos, @dias_trabalho)
-    `);
-    const info = stmt.run({
-      nome: dados.nome,
-      email: String(dados.email).toLowerCase().trim(),
-      senha_hash: dados.senha_hash,
-      cargo: dados.cargo || '',
-      is_admin: dados.is_admin ? 1 : 0,
-      ativo: dados.ativo === false ? 0 : 1,
-      jornada_entrada: dados.jornada_entrada || '08:00',
-      jornada_saida: dados.jornada_saida || '18:00',
-      carga_horaria_diaria_minutos: dados.carga_horaria_diaria_minutos || 480,
-      tolerancia_minutos: dados.tolerancia_minutos != null ? dados.tolerancia_minutos : 10,
-      dias_trabalho: dados.dias_trabalho || '1,2,3,4,5',
-    });
-    return this.porId(info.lastInsertRowid);
+  async criar(dados) {
+    const login = dados.login ? normalizarLogin(dados.login) : await this.gerarLoginUnico(dados.nome);
+    const { rows } = await pool.query(
+      `INSERT INTO funcionarios
+        (nome, email, login, senha_hash, cargo, is_admin, ativo, jornada_entrada, jornada_saida, carga_horaria_diaria_minutos, tolerancia_minutos, dias_trabalho, verificar_atraso, verificar_saida_antecipada)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       RETURNING *`,
+      [
+        dados.nome,
+        String(dados.email).toLowerCase().trim(),
+        login,
+        dados.senha_hash,
+        dados.cargo || '',
+        !!dados.is_admin,
+        dados.ativo === false ? false : true,
+        dados.jornada_entrada || '08:00',
+        dados.jornada_saida || '18:00',
+        dados.carga_horaria_diaria_minutos || 480,
+        dados.tolerancia_minutos != null ? dados.tolerancia_minutos : 10,
+        dados.dias_trabalho || '1,2,3,4,5',
+        dados.verificar_atraso === false ? false : true,
+        dados.verificar_saida_antecipada === false ? false : true,
+      ]
+    );
+    return rows[0];
   },
-  atualizar(id, dados) {
-    const atual = this.porId(id);
+  async atualizar(id, dados) {
+    const atual = await this.porId(id);
     if (!atual) return null;
     const merged = { ...atual, ...dados };
-    db.prepare(`
-      UPDATE funcionarios SET
-        nome = @nome,
-        email = @email,
-        cargo = @cargo,
-        is_admin = @is_admin,
-        ativo = @ativo,
-        jornada_entrada = @jornada_entrada,
-        jornada_saida = @jornada_saida,
-        carga_horaria_diaria_minutos = @carga_horaria_diaria_minutos,
-        tolerancia_minutos = @tolerancia_minutos,
-        dias_trabalho = @dias_trabalho
-      WHERE id = @id
-    `).run({
-      id,
-      nome: merged.nome,
-      email: String(merged.email).toLowerCase().trim(),
-      cargo: merged.cargo || '',
-      is_admin: merged.is_admin ? 1 : 0,
-      ativo: merged.ativo ? 1 : 0,
-      jornada_entrada: merged.jornada_entrada,
-      jornada_saida: merged.jornada_saida,
-      carga_horaria_diaria_minutos: merged.carga_horaria_diaria_minutos,
-      tolerancia_minutos: merged.tolerancia_minutos,
-      dias_trabalho: merged.dias_trabalho,
-    });
-    return this.porId(id);
+    const login = dados.login ? normalizarLogin(dados.login) : atual.login || (await this.gerarLoginUnico(merged.nome, id));
+    const { rows } = await pool.query(
+      `UPDATE funcionarios SET
+        nome = $1,
+        email = $2,
+        login = $3,
+        cargo = $4,
+        is_admin = $5,
+        ativo = $6,
+        jornada_entrada = $7,
+        jornada_saida = $8,
+        carga_horaria_diaria_minutos = $9,
+        tolerancia_minutos = $10,
+        dias_trabalho = $11,
+        verificar_atraso = $12,
+        verificar_saida_antecipada = $13
+      WHERE id = $14
+      RETURNING *`,
+      [
+        merged.nome,
+        String(merged.email).toLowerCase().trim(),
+        login,
+        merged.cargo || '',
+        !!merged.is_admin,
+        !!merged.ativo,
+        merged.jornada_entrada,
+        merged.jornada_saida,
+        merged.carga_horaria_diaria_minutos,
+        merged.tolerancia_minutos,
+        merged.dias_trabalho,
+        merged.verificar_atraso === false || merged.verificar_atraso === 0 ? false : true,
+        merged.verificar_saida_antecipada === false || merged.verificar_saida_antecipada === 0 ? false : true,
+        id,
+      ]
+    );
+    return rows[0];
   },
-  atualizarSenha(id, senha_hash) {
-    db.prepare('UPDATE funcionarios SET senha_hash = ? WHERE id = ?').run(senha_hash, id);
+  async atualizarSenha(id, senha_hash) {
+    await pool.query('UPDATE funcionarios SET senha_hash = $1 WHERE id = $2', [senha_hash, id]);
   },
-  contarAdminsAtivos() {
-    return db.prepare('SELECT COUNT(*) AS total FROM funcionarios WHERE is_admin = 1 AND ativo = 1').get().total;
+  async contarAdminsAtivos() {
+    const { rows } = await pool.query(
+      'SELECT COUNT(*)::int AS total FROM funcionarios WHERE is_admin = TRUE AND ativo = TRUE'
+    );
+    return rows[0].total;
   },
   publico: rowToFuncionarioPublico,
 };
 
 const RegistrosPonto = {
-  criar({ funcionario_id, tipo, data_hora_utc, observacao = '', editado_por_admin = 0 }) {
-    const info = db
-      .prepare(
-        'INSERT INTO registros_ponto (funcionario_id, tipo, data_hora_utc, observacao, editado_por_admin) VALUES (?, ?, ?, ?, ?)'
-      )
-      .run(funcionario_id, tipo, data_hora_utc, observacao, editado_por_admin ? 1 : 0);
-    return db.prepare('SELECT * FROM registros_ponto WHERE id = ?').get(info.lastInsertRowid);
+  async criar({ funcionario_id, tipo, data_hora_utc, observacao = '', editado_por_admin = 0 }) {
+    const { rows } = await pool.query(
+      `INSERT INTO registros_ponto (funcionario_id, tipo, data_hora_utc, observacao, editado_por_admin)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [funcionario_id, tipo, data_hora_utc, observacao, !!editado_por_admin]
+    );
+    return rows[0];
   },
-  ultimoDoFuncionario(funcionario_id) {
-    return db
-      .prepare('SELECT * FROM registros_ponto WHERE funcionario_id = ? ORDER BY data_hora_utc DESC LIMIT 1')
-      .get(funcionario_id);
+  async ultimoDoFuncionario(funcionario_id) {
+    const { rows } = await pool.query(
+      'SELECT * FROM registros_ponto WHERE funcionario_id = $1 ORDER BY data_hora_utc DESC LIMIT 1',
+      [funcionario_id]
+    );
+    return rows[0] || null;
   },
-  doFuncionarioEntrePeriodo(funcionario_id, inicioUtcIso, fimUtcIso) {
-    return db
-      .prepare(
-        'SELECT * FROM registros_ponto WHERE funcionario_id = ? AND data_hora_utc >= ? AND data_hora_utc <= ? ORDER BY data_hora_utc ASC'
-      )
-      .all(funcionario_id, inicioUtcIso, fimUtcIso);
+  async doFuncionarioEntrePeriodo(funcionario_id, inicioUtcIso, fimUtcIso) {
+    const { rows } = await pool.query(
+      'SELECT * FROM registros_ponto WHERE funcionario_id = $1 AND data_hora_utc >= $2 AND data_hora_utc <= $3 ORDER BY data_hora_utc ASC',
+      [funcionario_id, inicioUtcIso, fimUtcIso]
+    );
+    return rows;
   },
-  todosEntrePeriodo(inicioUtcIso, fimUtcIso) {
-    return db
-      .prepare(
-        'SELECT * FROM registros_ponto WHERE data_hora_utc >= ? AND data_hora_utc <= ? ORDER BY funcionario_id ASC, data_hora_utc ASC'
-      )
-      .all(inicioUtcIso, fimUtcIso);
+  async todosEntrePeriodo(inicioUtcIso, fimUtcIso) {
+    const { rows } = await pool.query(
+      'SELECT * FROM registros_ponto WHERE data_hora_utc >= $1 AND data_hora_utc <= $2 ORDER BY funcionario_id ASC, data_hora_utc ASC',
+      [inicioUtcIso, fimUtcIso]
+    );
+    return rows;
   },
-  remover(id) {
-    db.prepare('DELETE FROM registros_ponto WHERE id = ?').run(id);
+  async remover(id) {
+    await pool.query('DELETE FROM registros_ponto WHERE id = $1', [id]);
   },
-  porId(id) {
-    return db.prepare('SELECT * FROM registros_ponto WHERE id = ?').get(id);
+  async porId(id) {
+    const { rows } = await pool.query('SELECT * FROM registros_ponto WHERE id = $1', [id]);
+    return rows[0] || null;
   },
 };
 

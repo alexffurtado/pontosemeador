@@ -7,7 +7,7 @@ const { Funcionarios } = require('./repository');
 // Envolve um handler exigindo usuario autenticado. Injeta ctx.user (registro completo, com senha_hash).
 function withAuth(handler) {
   return async (req, res, params, query) => {
-    const user = getUserFromReq(req);
+    const user = await getUserFromReq(req);
     if (!user) return sendJson(res, 401, { erro: 'Nao autenticado. Faca login novamente.' });
     return handler({ req, res, params, query, user });
   };
@@ -15,7 +15,7 @@ function withAuth(handler) {
 
 // Igual a withAuth, mas exige que o usuario seja administrador.
 function withAdmin(handler) {
-  return withAuth(({ req, res, params, query, user }) => {
+  return withAuth(async ({ req, res, params, query, user }) => {
     if (!user.is_admin) return sendJson(res, 403, { erro: 'Acesso restrito a administradores.' });
     return handler({ req, res, params, query, user });
   });

@@ -35,9 +35,9 @@ function utcBoundsForLocalRange(inicioKey, fimKey) {
   return { inicioUtcIso: inicioUtc.toISOString(), fimUtcIso: fimUtc.toISOString() };
 }
 
-function relatorioDoFuncionario(funcionario, inicio, fim, hojeKey) {
+async function relatorioDoFuncionario(funcionario, inicio, fim, hojeKey) {
   const { inicioUtcIso, fimUtcIso } = utcBoundsForLocalRange(inicio, fim);
-  const registros = RegistrosPonto.doFuncionarioEntrePeriodo(funcionario.id, inicioUtcIso, fimUtcIso);
+  const registros = await RegistrosPonto.doFuncionarioEntrePeriodo(funcionario.id, inicioUtcIso, fimUtcIso);
   return calcularRelatorio(funcionario, registros, inicio, fim, hojeKey);
 }
 
@@ -50,22 +50,31 @@ function enviarArquivo(res, buffer, filename, contentType) {
   res.end(buffer);
 }
 
+async function linhasEquipe(funcionarios, inicio, fim, hojeKey) {
+  return Promise.all(
+    funcionarios.map(async (f) => ({
+      funcionario: Funcionarios.publico(f),
+      totais: (await relatorioDoFuncionario(f, inicio, fim, hojeKey)).totais,
+    }))
+  );
+}
+
 function register(router) {
   // ---------- Relatorio do proprio colaborador ----------
   router.get(
     '/api/relatorio/meu',
-    withAuth(({ res, user, query }) => {
+    withAuth(async ({ res, user, query }) => {
       const { inicio, fim, hojeKey } = periodoPadrao(query);
-      const relatorio = relatorioDoFuncionario(user, inicio, fim, hojeKey);
+      const relatorio = await relatorioDoFuncionario(user, inicio, fim, hojeKey);
       sendJson(res, 200, { inicio, fim, ...relatorio });
     })
   );
 
   router.get(
     '/api/relatorio/meu/exportar',
-    withAuth(({ res, user, query }) => {
+    withAuth(async ({ res, user, query }) => {
       const { inicio, fim, hojeKey } = periodoPadrao(query);
-      const { dias, totais } = relatorioDoFuncionario(user, inicio, fim, hojeKey);
+      const { dias, totais } = await relatorioDoFuncionario(user, inicio, fim, hojeKey);
       const periodoLabel = `${localDateBR(inicio)} a ${localDateBR(fim)}`;
       const nomeArquivo = `ponto_${user.nome.replace(/\s+/g, '_').toLowerCase()}_${inicio}_a_${fim}`;
       if (query.formato === 'pdf') {
@@ -80,28 +89,22 @@ function register(router) {
   // ---------- Relatorio consolidado da equipe (somente admin) ----------
   router.get(
     '/api/relatorio/equipe',
-    withAdmin(({ res, query }) => {
+    withAdmin(async ({ res, query }) => {
       const { inicio, fim, hojeKey } = periodoPadrao(query);
       const incluirInativos = query.incluirInativos === '1';
-      const funcionarios = Funcionarios.listarTodos({ incluirInativos });
-      const linhas = funcionarios.map((f) => ({
-        funcionario: Funcionarios.publico(f),
-        totais: relatorioDoFuncionario(f, inicio, fim, hojeKey).totais,
-      }));
+      const funcionarios = await Funcionarios.listarTodos({ incluirInativos });
+      const linhas = await linhasEquipe(funcionarios, inicio, fim, hojeKey);
       sendJson(res, 200, { inicio, fim, linhas });
     })
   );
 
   router.get(
     '/api/relatorio/equipe/exportar',
-    withAdmin(({ res, query }) => {
+    withAdmin(async ({ res, query }) => {
       const { inicio, fim, hojeKey } = periodoPadrao(query);
       const incluirInativos = query.incluirInativos === '1';
-      const funcionarios = Funcionarios.listarTodos({ incluirInativos });
-      const linhas = funcionarios.map((f) => ({
-        funcionario: Funcionarios.publico(f),
-        totais: relatorioDoFuncionario(f, inicio, fim, hojeKey).totais,
-      }));
+      const funcionarios = await Funcionarios.listarTodos({ incluirInativos });
+      const linhas = await linhasEquipe(funcionarios, inicio, fim, hojeKey);
       const periodoLabel = `${localDateBR(inicio)} a ${localDateBR(fim)}`;
       const nomeArquivo = `relatorio_equipe_plano_semeador_${inicio}_a_${fim}`;
       if (query.formato === 'pdf') {

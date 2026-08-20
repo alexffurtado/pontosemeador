@@ -67,7 +67,7 @@
   // ===================== Lista de colaboradores =====================
   async function carregarColaboradores() {
     const tbody = document.getElementById('tabela-colaboradores');
-    tbody.innerHTML = '<tr><td colspan="6" class="carregando">Carregando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="carregando">Carregando...</td></tr>';
     try {
       const dados = await apiFetch('/api/funcionarios');
       window.__colaboradores = dados.funcionarios;
@@ -75,6 +75,7 @@
         .map((f) => `
           <tr>
             <td>${f.nome}${f.is_admin ? ' <span class="tag tag-admin">Admin</span>' : ''}</td>
+            <td>${f.login || '-'}</td>
             <td>${f.email}</td>
             <td>${f.cargo || '-'}</td>
             <td>${f.jornada_entrada} - ${f.jornada_saida}</td>
@@ -88,7 +89,7 @@
       tbody.querySelectorAll('[data-editar]').forEach((btn) => btn.addEventListener('click', () => abrirEdicao(btn.dataset.editar)));
       tbody.querySelectorAll('[data-senha]').forEach((btn) => btn.addEventListener('click', () => abrirModalSenha(btn.dataset.senha)));
     } catch (e) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="mensagem-erro">${e.message}</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7"><div class="mensagem-erro">${e.message}</div></td></tr>`;
     }
   }
 
@@ -108,9 +109,33 @@
 
   function fecharModalColaborador() { modalColaborador.classList.add('oculto'); }
 
+  // Sugere um login a partir do primeiro nome (mesma logica usada no servidor):
+  // minusculo, sem acentos/espacos/simbolos.
+  function sugerirLoginDoNome(nome) {
+    const primeiro = (nome || '').trim().split(/\s+/)[0] || '';
+    return primeiro
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  const inputColNome = document.getElementById('col-nome');
+  const inputColLogin = document.getElementById('col-login');
+  let loginEditadoManualmente = false;
+  inputColLogin.addEventListener('input', () => { loginEditadoManualmente = true; });
+  inputColNome.addEventListener('input', () => {
+    // So auto-preenche ao criar um colaborador novo, e enquanto o admin nao
+    // tiver digitado nada manualmente no campo de login.
+    if (!document.getElementById('col-id').value && !loginEditadoManualmente) {
+      inputColLogin.value = sugerirLoginDoNome(inputColNome.value);
+    }
+  });
+
   function abrirNovoColaborador() {
     formColaborador.reset();
     document.getElementById('col-id').value = '';
+    loginEditadoManualmente = false;
     document.getElementById('modal-colaborador-titulo').textContent = 'Novo colaborador';
     document.getElementById('modal-colaborador-mensagem').innerHTML = '';
     document.getElementById('campo-col-senha').classList.remove('oculto');
@@ -120,6 +145,8 @@
     document.getElementById('col-saida').value = '18:00';
     document.getElementById('col-carga').value = 8;
     document.getElementById('col-tolerancia').value = 10;
+    document.getElementById('col-verificar-atraso').checked = true;
+    document.getElementById('col-verificar-saida-antecipada').checked = true;
     ['0', '1', '2', '3', '4', '5', '6'].forEach((v) => {
       document.getElementById(`col-dia-${v}`).checked = ['1', '2', '3', '4', '5'].includes(v);
     });
@@ -133,7 +160,9 @@
     document.getElementById('modal-colaborador-mensagem').innerHTML = '';
     document.getElementById('modal-colaborador-titulo').textContent = 'Editar colaborador';
     document.getElementById('col-id').value = f.id;
+    loginEditadoManualmente = true;
     document.getElementById('col-nome').value = f.nome;
+    document.getElementById('col-login').value = f.login || '';
     document.getElementById('col-email').value = f.email;
     document.getElementById('col-cargo').value = f.cargo || '';
     document.getElementById('col-entrada').value = f.jornada_entrada;
@@ -142,6 +171,8 @@
     document.getElementById('col-tolerancia').value = f.tolerancia_minutos;
     document.getElementById('col-admin').checked = f.is_admin;
     document.getElementById('col-ativo').checked = f.ativo;
+    document.getElementById('col-verificar-atraso').checked = f.verificar_atraso !== false;
+    document.getElementById('col-verificar-saida-antecipada').checked = f.verificar_saida_antecipada !== false;
     document.getElementById('campo-col-senha').classList.add('oculto');
     document.getElementById('col-senha').required = false;
     document.getElementById('campo-col-ativo').classList.remove('oculto');
@@ -163,6 +194,7 @@
     const diasSelecionados = DIAS_SEMANA_CURTO.filter((d) => document.getElementById(`col-dia-${d.valor}`).checked).map((d) => d.valor);
     const payload = {
       nome: document.getElementById('col-nome').value.trim(),
+      login: document.getElementById('col-login').value.trim(),
       email: document.getElementById('col-email').value.trim(),
       cargo: document.getElementById('col-cargo').value.trim(),
       jornada_entrada: document.getElementById('col-entrada').value,
@@ -172,6 +204,8 @@
       dias_trabalho: diasSelecionados.join(','),
       is_admin: document.getElementById('col-admin').checked,
       ativo: document.getElementById('col-ativo').checked,
+      verificar_atraso: document.getElementById('col-verificar-atraso').checked,
+      verificar_saida_antecipada: document.getElementById('col-verificar-saida-antecipada').checked,
     };
     if (!id) payload.senha = document.getElementById('col-senha').value;
     try {
@@ -229,7 +263,7 @@
 
   async function carregarDetalhe() {
     const tbody = document.getElementById('detalhe-tabela');
-    tbody.innerHTML = '<tr><td colspan="8" class="carregando">Carregando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="carregando">Carregando...</td></tr>';
     try {
       const params = new URLSearchParams({
         inicio: document.getElementById('detalhe-inicio').value,
@@ -239,7 +273,7 @@
       renderizarResumo(document.getElementById('detalhe-resumo'), dados.totais);
       renderizarTabelaRelatorio(tbody, dados.dias);
     } catch (e) {
-      tbody.innerHTML = `<tr><td colspan="8"><div class="mensagem-erro">${e.message}</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5"><div class="mensagem-erro">${e.message}</div></td></tr>`;
     }
   }
 

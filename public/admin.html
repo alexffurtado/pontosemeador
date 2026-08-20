@@ -62,10 +62,10 @@
       <div class="tabela-wrap" style="margin-top:16px;">
         <table>
           <thead>
-            <tr><th>Nome</th><th>E-mail</th><th>Cargo</th><th>Jornada</th><th>Status</th><th></th></tr>
+            <tr><th>Nome</th><th>Login</th><th>E-mail</th><th>Cargo</th><th>Jornada</th><th>Status</th><th></th></tr>
           </thead>
           <tbody id="tabela-colaboradores">
-            <tr><td colspan="6" class="carregando">Carregando...</td></tr>
+            <tr><td colspan="7" class="carregando">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -84,7 +84,12 @@
           <input type="text" id="col-nome" required>
         </div>
         <div class="campo">
-          <label for="col-email">E-mail (login)</label>
+          <label for="col-login">Login de acesso</label>
+          <input type="text" id="col-login" placeholder="ex.: joao" autocapitalize="off" autocorrect="off">
+          <div class="ajuda">Sugerido automaticamente a partir do nome. Usado pelo colaborador para entrar (mais facil que o e-mail). Apenas letras minusculas, numeros, ponto, traco ou underline.</div>
+        </div>
+        <div class="campo">
+          <label for="col-email">E-mail</label>
           <input type="email" id="col-email" required>
         </div>
         <div class="campo" id="campo-col-senha">
@@ -119,6 +124,18 @@
         <div class="campo">
           <label>Dias de trabalho</label>
           <div id="col-dias" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:4px;"></div>
+        </div>
+        <div class="campo">
+          <label>Regime de horario</label>
+          <div class="ajuda" style="margin-bottom:6px;">Para agentes de planta&otilde;o/sobreaviso (chamados fora do expediente fixo, inclusive de madrugada), desmarque a verifica&ccedil;&atilde;o de sa&iacute;da antecipada abaixo — assim os retornos de atendimento noturno n&atilde;o geram alertas incorretos. As horas continuam sendo somadas normalmente, inclusive quando o plant&atilde;o passa da meia-noite.</div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <input type="checkbox" id="col-verificar-atraso" style="width:auto;" checked>
+            <label for="col-verificar-atraso" style="margin:0;">Verificar atraso na entrada</label>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="col-verificar-saida-antecipada" style="width:auto;" checked>
+            <label for="col-verificar-saida-antecipada" style="margin:0;">Verificar saida antecipada</label>
+          </div>
         </div>
         <div class="campo" style="display:flex; align-items:center; gap:8px;">
           <input type="checkbox" id="col-admin" style="width:auto;">
@@ -179,7 +196,7 @@
       <div class="tabela-wrap" style="max-height:280px; overflow-y:auto;">
         <table>
           <thead>
-            <tr><th>Data</th><th>Dia</th><th>Entrada</th><th>Saida interv.</th><th>Retorno interv.</th><th>Saida</th><th>Horas</th><th>Situacao</th></tr>
+            <tr><th>Data</th><th>Dia</th><th>Marcacoes</th><th>Horas</th><th>Situacao</th></tr>
           </thead>
           <tbody id="detalhe-tabela"></tbody>
         </table>

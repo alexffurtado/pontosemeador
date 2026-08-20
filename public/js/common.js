@@ -115,9 +115,23 @@ function minutosParaHoras(totalMin) {
   return `${sinal}${h}h${String(m).padStart(2, '0')}`;
 }
 
-function eventoHora(dia, tipo) {
-  const ev = dia.eventos.find((e) => e.tipo === tipo);
-  return ev ? ev.hora : '<span class="texto-suave">-</span>';
+const TIPO_ABREV = { entrada: 'Ent', saida_intervalo: 'Said.interv', retorno_intervalo: 'Ret.interv', saida: 'Said' };
+
+// Mostra TODAS as marcacoes do dia como uma lista compacta (nao apenas 4 fixas),
+// para que plantoes/chamados extras (inclusive de madrugada) fiquem visiveis.
+function marcacoesDoDia(dia) {
+  if (!dia.eventos.length) return '<span class="texto-suave">-</span>';
+  const chips = dia.eventos
+    .map((e) => `<span class="marca-chip" title="${e.label}">${TIPO_ABREV[e.tipo] || '?'} ${e.hora}</span>`)
+    .join(' ');
+  let notas = '';
+  if (dia.continuacaoDoDiaAnterior) {
+    notas += '<div class="texto-suave" style="font-size:0.72rem; margin-top:2px;">&#8618; plantao iniciado no dia anterior</div>';
+  }
+  if (dia.continuaNoDiaSeguinte) {
+    notas += '<div class="texto-suave" style="font-size:0.72rem; margin-top:2px;">&#8618; continua apos a meia-noite</div>';
+  }
+  return chips + notas;
 }
 
 function tagStatusDia(dia) {
@@ -156,7 +170,7 @@ function renderizarResumo(container, totais) {
 // Renderiza o corpo da tabela diaria de um relatorio.
 function renderizarTabelaRelatorio(tbody, dias) {
   if (!dias.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="carregando">Nenhum registro no periodo.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="carregando">Nenhum registro no periodo.</td></tr>';
     return;
   }
   tbody.innerHTML = dias
@@ -165,10 +179,7 @@ function renderizarTabelaRelatorio(tbody, dias) {
       <tr>
         <td>${formatarDataBR(dia.data)}</td>
         <td>${nomeDiaSemana(dia.data)}</td>
-        <td>${eventoHora(dia, 'entrada')}</td>
-        <td>${eventoHora(dia, 'saida_intervalo')}</td>
-        <td>${eventoHora(dia, 'retorno_intervalo')}</td>
-        <td>${eventoHora(dia, 'saida')}</td>
+        <td>${marcacoesDoDia(dia)}</td>
         <td>${minutosParaHoras(dia.minutosTrabalhados)}</td>
         <td>${tagStatusDia(dia)}</td>
       </tr>`

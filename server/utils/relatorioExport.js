@@ -15,25 +15,29 @@ function statusDoDia(dia) {
   return partes.join(' | ');
 }
 
-function eventoHora(dia, tipo) {
-  const ev = dia.eventos.find((e) => e.tipo === tipo);
-  return ev ? ev.hora : '';
+const TIPO_ABREV = { entrada: 'Ent', saida_intervalo: 'Said.interv', retorno_intervalo: 'Ret.interv', saida: 'Said' };
+
+// Lista TODAS as marcacoes do dia (nao apenas 4 fixas), para que plantoes/chamados
+// extras (inclusive de madrugada) apareçam no relatorio exportado.
+function marcacoesDoDia(dia) {
+  if (!dia.eventos.length) return '-';
+  let texto = dia.eventos.map((e) => `${TIPO_ABREV[e.tipo] || '?'} ${e.hora}`).join(' | ');
+  if (dia.continuacaoDoDiaAnterior) texto += ' (plantao iniciado no dia anterior)';
+  if (dia.continuaNoDiaSeguinte) texto += ' (continua apos a meia-noite)';
+  return texto;
 }
 
 function linhasDetalhado(dias) {
   return dias.map((dia) => [
     localDateBR(dia.data),
     weekdayName(weekdayOfDateKey(dia.data)),
-    eventoHora(dia, 'entrada'),
-    eventoHora(dia, 'saida_intervalo'),
-    eventoHora(dia, 'retorno_intervalo'),
-    eventoHora(dia, 'saida'),
+    marcacoesDoDia(dia),
     minutesToHoursLabel(dia.minutosTrabalhados),
     statusDoDia(dia),
   ]);
 }
 
-const COLUNAS_DETALHADO_HEADER = ['Data', 'Dia da semana', 'Entrada', 'Saida intervalo', 'Retorno intervalo', 'Saida', 'Horas', 'Situacao'];
+const COLUNAS_DETALHADO_HEADER = ['Data', 'Dia da semana', 'Marcacoes', 'Horas', 'Situacao'];
 
 function csvRelatorioDetalhado(funcionario, dias, totais) {
   const linhas = linhasDetalhado(dias);
@@ -60,13 +64,10 @@ function pdfRelatorioDetalhado(funcionario, dias, totais, periodoLabel) {
     landscape: true,
     colunas: [
       { header: 'Data', width: 70 },
-      { header: 'Dia da semana', width: 95 },
-      { header: 'Entrada', width: 65 },
-      { header: 'Saida interv.', width: 90 },
-      { header: 'Retorno interv.', width: 95 },
-      { header: 'Saida', width: 65 },
+      { header: 'Dia da semana', width: 90 },
+      { header: 'Marcacoes', width: 330 },
       { header: 'Horas', width: 65 },
-      { header: 'Situacao', width: 225 },
+      { header: 'Situacao', width: 165 },
     ],
     linhas,
     resumo,

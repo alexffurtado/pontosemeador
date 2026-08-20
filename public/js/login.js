@@ -17,10 +17,10 @@
     areaMensagem.innerHTML = '';
     btnEntrar.disabled = true;
     btnEntrar.textContent = 'Entrando...';
-    const email = document.getElementById('email').value.trim();
+    const login = document.getElementById('login').value.trim();
     const senha = document.getElementById('senha').value;
     try {
-      await apiFetch('/api/login', { method: 'POST', body: JSON.stringify({ email, senha }) });
+      await apiFetch('/api/login', { method: 'POST', body: JSON.stringify({ login, senha }) });
       window.location.href = '/dashboard.html';
     } catch (e) {
       areaMensagem.innerHTML = `<div class="mensagem-erro">${e.message}</div>`;

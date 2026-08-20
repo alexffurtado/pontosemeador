@@ -7,12 +7,12 @@ const config = require('./config');
 
 const COOKIE_NAME = 'ps_sessao';
 
-function getUserFromReq(req) {
+async function getUserFromReq(req) {
   const cookies = parseCookies(req);
   const token = cookies[COOKIE_NAME];
   const data = verifySessionToken(token);
   if (!data || !data.uid) return null;
-  const user = Funcionarios.porId(data.uid);
+  const user = await Funcionarios.porId(data.uid);
   if (!user || !user.ativo) return null;
   return user;
 }

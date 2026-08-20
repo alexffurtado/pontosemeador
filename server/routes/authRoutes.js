@@ -11,13 +11,19 @@ function register(router) {
   router.post('/api/login', async (req, res) => {
     const body = await withBody(req, res);
     if (!body) return;
-    const { email, senha } = body;
-    if (!email || !senha) {
-      return sendJson(res, 400, { erro: 'Informe e-mail e senha.' });
+    // Aceita tanto o login curto (ex.: "joao") quanto o e-mail antigo, para
+    // nao quebrar quem ainda tem o e-mail salvo/memorizado.
+    const identificador = String(body.login || body.email || '').trim();
+    const { senha } = body;
+    if (!identificador || !senha) {
+      return sendJson(res, 400, { erro: 'Informe o login e a senha.' });
     }
-    const user = Funcionarios.porEmail(email);
+    let user = await Funcionarios.porLogin(identificador);
+    if (!user && identificador.includes('@')) {
+      user = await Funcionarios.porEmail(identificador);
+    }
     if (!user || !user.ativo || !verifyPassword(senha, user.senha_hash)) {
-      return sendJson(res, 401, { erro: 'E-mail ou senha invalidos.' });
+      return sendJson(res, 401, { erro: 'Login ou senha invalidos.' });
     }
     sessionHelper.login(res, user.id);
     sendJson(res, 200, { usuario: Funcionarios.publico(user) });
@@ -50,7 +56,7 @@ function register(router) {
       if (!verifyPassword(senhaAtual, user.senha_hash)) {
         return sendJson(res, 401, { erro: 'Senha atual incorreta.' });
       }
-      Funcionarios.atualizarSenha(user.id, hashPassword(novaSenha));
+      await Funcionarios.atualizarSenha(user.id, hashPassword(novaSenha));
       sendJson(res, 200, { ok: true });
     })
   );
@@ -64,11 +70,11 @@ function register(router) {
       const email = (body.email || '').trim();
       if (!nome || nome.length < 2) return sendJson(res, 400, { erro: 'Informe um nome valido.' });
       if (!isValidEmail(email)) return sendJson(res, 400, { erro: 'Informe um e-mail valido.' });
-      const existente = Funcionarios.porEmail(email);
+      const existente = await Funcionarios.porEmail(email);
       if (existente && existente.id !== user.id) {
         return sendJson(res, 409, { erro: 'Ja existe um usuario com esse e-mail.' });
       }
-      const atualizado = Funcionarios.atualizar(user.id, { nome, email });
+      const atualizado = await Funcionarios.atualizar(user.id, { nome, email });
       sendJson(res, 200, { usuario: Funcionarios.publico(atualizado) });
     })
   );
