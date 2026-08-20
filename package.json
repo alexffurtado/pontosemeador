@@ -5,12 +5,13 @@
   "main": "server.js",
   "private": true,
   "scripts": {
-    "start": "node server.js",
-    "seed": "node server/seed.js"
+    "start": "node server.js"
   },
   "engines": {
     "node": ">=22.5.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
   "license": "UNLICENSED"
 }

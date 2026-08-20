@@ -5,7 +5,7 @@ const path = require('node:path');
 const { URL } = require('node:url');
 
 const config = require('./server/config');
-require('./server/db'); // garante que o banco e o schema sejam inicializados/seeded
+const { initDb } = require('./server/db');
 
 const Router = require('./server/router');
 const { serveStatic } = require('./server/httpUtils');
@@ -52,6 +52,25 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(config.port, () => {
-  console.log(`Plano Semeador - Ponto Digital rodando em http://localhost:${config.port}`);
-});
+// A inicializacao do banco (criacao de tabelas/migracoes/seed do admin) e
+// assincrona com Postgres, entao so comecamos a aceitar conexoes depois que
+// ela terminar com sucesso.
+async function start() {
+  try {
+    await initDb();
+  } catch (err) {
+    console.error('----------------------------------------------------');
+    console.error('Erro ao conectar/inicializar o banco de dados Postgres:');
+    console.error(err.message);
+    console.error('Verifique se a variavel de ambiente DATABASE_URL esta');
+    console.error('correta e se o banco esta acessivel.');
+    console.error('----------------------------------------------------');
+    process.exit(1);
+  }
+
+  server.listen(config.port, () => {
+    console.log(`Plano Semeador - Ponto Digital rodando em http://localhost:${config.port}`);
+  });
+}
+
+start();

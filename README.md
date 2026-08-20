@@ -2,15 +2,24 @@
 
 Sistema web de marcação de ponto para os colaboradores da funerária **Plano Semeador**. Cada colaborador tem seu próprio login, bate ponto (entrada, saída para intervalo, retorno do intervalo e saída) e pode consultar seus próprios relatórios de horas, atrasos e faltas. Administradores têm um painel para cadastrar colaboradores, corrigir marcações e gerar relatórios consolidados da equipe em CSV (Excel) e PDF.
 
-## Por que não precisa de "npm install"
+## Sobre as dependências
 
-O sistema foi construído **sem nenhuma dependência externa** — apenas recursos nativos do Node.js (servidor HTTP, o módulo `node:sqlite` para o banco de dados, `node:crypto` para senhas e sessões). Isso significa:
+O sistema usa quase só recursos nativos do Node.js (servidor HTTP, `node:crypto` para senhas e sessões) — a única dependência externa é o driver oficial do Postgres (`pg`), usado para conversar com o banco de dados. Isso significa:
 
-- Não há risco de vulnerabilidades em pacotes de terceiros.
-- A instalação em qualquer host (Render, Railway, VPS, etc.) é mais rápida e não depende de compilação nativa.
-- Basta ter o Node.js instalado e rodar `node server.js`.
+- Praticamente nenhum risco de vulnerabilidades em pacotes de terceiros.
+- Os dados (colaboradores e marcações de ponto) ficam num banco Postgres externo, não em disco local — então funciona no plano **gratuito** do Render (ou de qualquer host), sem precisar de disco persistente pago.
 
-**Requisito:** Node.js 22.5 ou superior (o módulo nativo de SQLite foi introduzido nessa versão). Verifique com `node -v`.
+**Requisitos:** Node.js 22.5 ou superior (verifique com `node -v`) e uma connection string de um banco Postgres (veja "Banco de dados" abaixo).
+
+## Banco de dados (gratuito, sem cartão de crédito)
+
+Antes de rodar o servidor, você precisa de um banco Postgres. O [Neon](https://neon.tech) tem um plano gratuito permanente, sem necessidade de cartão:
+
+1. Crie uma conta gratuita em https://neon.tech e crie um novo projeto.
+2. Na tela do projeto, copie a **Connection string** (algo como `postgresql://usuario:senha@ep-xxxx.us-east-2.aws.neon.tech/neondb?sslmode=require`).
+3. Defina essa string na variável de ambiente `DATABASE_URL` (veja `.env.example`).
+
+O servidor cria as tabelas automaticamente na primeira execução — não é preciso rodar nenhum script de migração manualmente.
 
 ## Como rodar localmente
 
@@ -18,16 +27,16 @@ O sistema foi construído **sem nenhuma dependência externa** — apenas recurs
 node server.js
 ```
 
-O servidor sobe em `http://localhost:3000` (ajustável pela variável `PORT`). Na primeira execução, um banco SQLite é criado automaticamente em `data/ponto.db` e um usuário **administrador** é criado com as credenciais:
+O servidor sobe em `http://localhost:3000` (ajustável pela variável `PORT`). Na primeira execução, as tabelas são criadas automaticamente no banco Postgres configurado em `DATABASE_URL`, e um usuário **administrador** é criado com as credenciais:
 
-- **E-mail:** `admin@planosemeador.com.br`
+- **Login:** `administrador`
 - **Senha:** `semeador2026`
 
 Essas credenciais aparecem no console na primeira inicialização. **Troque a senha assim que possível** (tela "Bater Ponto" → seção "Meu perfil" → "Alterar senha"), ou defina `ADMIN_EMAIL`/`ADMIN_SENHA` num arquivo `.env` (veja `.env.example`) antes de rodar pela primeira vez.
 
 ## Funcionalidades
 
-- **Login individual por colaborador** (e-mail + senha), com sessão segura em cookie `httpOnly`.
+- **Login individual por colaborador** usando um **login curto** (ex.: `joao`, gerado automaticamente a partir do primeiro nome e editável pelo admin) + senha — mais fácil de digitar/lembrar que um e-mail. O e-mail continua cadastrado para contato, e também funciona como login alternativo por compatibilidade. Sessão segura em cookie `httpOnly`.
 - **Bater ponto** com um botão único que detecta automaticamente a próxima marcação do dia (entrada → saída intervalo → retorno intervalo → saída).
 - **Meus Relatórios**: cada colaborador vê suas próprias horas trabalhadas, atrasos, saídas antecipadas e faltas por período, com exportação em CSV (abre no Excel) e PDF.
 - **Painel de Administração** (visível só para administradores):
@@ -44,7 +53,7 @@ Essas credenciais aparecem no console na primeira inicialização. **Troque a se
 server.js                 → ponto de entrada do servidor HTTP
 server/
   config.js                → configurações e variáveis de ambiente
-  db.js                     → conexão SQLite, schema e criação do admin inicial
+  db.js                     → conexão Postgres (pg), schema e criação do admin inicial
   auth.js                   → hash de senha (scrypt) e tokens de sessão assinados (HMAC)
   router.js                 → roteador HTTP minimalista
   repository.js             → acesso a dados (funcionários e registros de ponto)
@@ -54,29 +63,26 @@ server/
     relatorioUtils.js         → cálculo de horas, atrasos, saídas antecipadas e faltas
     csv.js / pdf.js           → geração de arquivos CSV e PDF (sem bibliotecas externas)
 public/                    → front-end (HTML/CSS/JS puro, sem framework)
-data/                      → banco de dados SQLite (criado automaticamente, não versionar)
 ```
 
 ## Publicando o site (hospedagem)
 
-Qualquer serviço que rode Node.js 22+ funciona. Alguns caminhos comuns:
+Qualquer serviço que rode Node.js 22+ funciona, mesmo no plano gratuito, já que os dados vivem no banco Postgres (não em disco local). Alguns caminhos comuns:
 
-1. **Render / Railway / Fly.io** (mais simples): crie um novo serviço Web, aponte para este repositório, comando de start `node server.js`. Configure um **disco persistente** — sem isso, o banco de dados (colaboradores e marcações) é perdido a cada reinício/novo deploy.
+1. **Render / Railway / Fly.io** (mais simples): crie um novo serviço Web, aponte para este repositório, comando de start `node server.js`. Defina a variável de ambiente `DATABASE_URL` (veja "Banco de dados" acima) — sem ela, o servidor não inicia.
 2. **VPS próprio**: copie os arquivos, rode `node server.js` atrás de um processo gerenciado (ex.: `pm2 start server.js --name ponto-semeador`) e um proxy reverso (ex.: Nginx) com HTTPS na frente.
 
-### Configurando o disco persistente no Render
+### Configurando no Render (plano Free)
 
-1. No painel do serviço, vá em **Settings → Disks** (ou **Disks** no menu lateral) e clique em **Add Disk**.
-2. Dê um nome (ex.: `ponto-dados`), defina o **Mount Path** como `/var/data` e o tamanho (1 GB já é mais do que suficiente).
-3. Isso exige um plano pago (o disco persistente não está disponível no plano gratuito).
-4. Defina a variável de ambiente `DATA_DIR=/var/data` no serviço, apontando para o mesmo caminho do disco.
-5. Faça um novo deploy — a partir daí, o banco de dados vive no disco e sobrevive a reinícios e a novos deploys.
+1. No painel do serviço, vá em **Environment** e adicione a variável `DATABASE_URL` com a connection string do Neon (ou outro Postgres).
+2. Adicione também `SESSION_SECRET` com um texto longo e aleatório — sem essa variável, o segredo de sessão é gerado em disco e se perde a cada reinício/novo deploy no plano Free, deslogando todo mundo.
+3. Faça um novo deploy. Não é necessário disco nem plano pago: o Render Free já é suficiente, os dados ficam no Neon.
 
-Em produção, defina a variável de ambiente `SESSION_SECRET` (um texto longo e aleatório) para garantir que as sessões continuem válidas entre reinícios do servidor, e sirva o site sempre com **HTTPS** (essencial para proteger senhas e cookies de login).
+Em produção, sirva o site sempre com **HTTPS** (essencial para proteger senhas e cookies de login) — o Render já faz isso automaticamente.
 
 ## Backup dos dados
 
-Todo o histórico de ponto e cadastro de colaboradores fica em um único arquivo: `data/ponto.db` (mais os arquivos auxiliares `ponto.db-wal` e `ponto.db-shm` do SQLite). Faça backup periódico desse arquivo — por exemplo, copiando-o diariamente para outro local ou serviço de armazenamento.
+Todo o histórico de ponto e cadastro de colaboradores fica no banco Postgres (Neon ou outro provedor). A maioria dos provedores gratuitos já mantém backups automáticos recentes, mas vale exportar periodicamente: no Neon, é possível rodar `pg_dump` apontando para a connection string, ou usar a opção de export/branch do próprio painel.
 
 ## Personalizando as cores
 
@@ -86,4 +92,4 @@ A paleta de verdes e brancos está centralizada no topo do arquivo `public/css/s
 
 - O horário de verão foi abolido no Brasil desde 2019, então o sistema assume o fuso `America/Sao_Paulo` como UTC-03:00 fixo — não é necessário nenhum ajuste sazonal.
 - A exportação "Excel" gera um arquivo `.csv` (compatível e reconhecido nativamente pelo Excel/Google Sheets), evitando dependência de bibliotecas externas para o formato `.xlsx`.
-- O SQLite nativo do Node (`node:sqlite`) ainda é classificado como recurso experimental pela documentação oficial do Node.js; ele é estável para o volume de dados de uma equipe de dezenas de colaboradores, mas acompanhe os releases do Node caso alguma mudança de API ocorra em versões futuras.
+- Planos gratuitos de Postgres (como o do Neon) costumam "hibernar" a conexão após um tempo de inatividade e acordam automaticamente na próxima requisição — a primeira marcação de ponto depois de um tempo parado pode demorar um ou dois segundos a mais, o que é normal.
