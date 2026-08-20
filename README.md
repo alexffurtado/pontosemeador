@@ -36,6 +36,7 @@ Essas credenciais aparecem no console na primeira inicialização. **Troque a se
   - Jornada configurável por colaborador (horário de entrada/saída esperado, carga horária diária, tolerância em minutos e dias de trabalho — importante para funerárias que têm colaboradores com escalas diferentes, incluindo fins de semana).
   - Correção manual de marcações esquecidas (fica registrado como ajuste feito pelo administrador).
   - Detalhamento (drill-down) do relatório de qualquer colaborador individualmente.
+- **Suporte a plantão/sobreaviso**: qualquer colaborador pode bater ponto quantas vezes forem necessárias no mesmo dia (ex.: expediente normal + um ou mais chamados noturnos). O cálculo de horas soma corretamente sessões que atravessam a meia-noite (ex.: chamado às 22h, atendimento até 1h do dia seguinte), e a tabela de relatório mostra todas as marcações do dia, não só 4 fixas. Para colaboradores com escala variável (agentes funerários de sobreaviso), o administrador pode desmarcar "Verificar saída antecipada" no cadastro do colaborador, evitando alertas incorretos quando ele bate a saída de um chamado de madrugada.
 
 ## Estrutura do projeto
 
@@ -60,8 +61,16 @@ data/                      → banco de dados SQLite (criado automaticamente, n�
 
 Qualquer serviço que rode Node.js 22+ funciona. Alguns caminhos comuns:
 
-1. **Render / Railway / Fly.io** (mais simples): crie um novo serviço Web, aponte para este repositório, comando de start `node server.js`. Configure um **disco persistente** apontando para a pasta `data/` — sem isso, o banco de dados (colaboradores e marcações) é perdido a cada novo deploy.
+1. **Render / Railway / Fly.io** (mais simples): crie um novo serviço Web, aponte para este repositório, comando de start `node server.js`. Configure um **disco persistente** — sem isso, o banco de dados (colaboradores e marcações) é perdido a cada reinício/novo deploy.
 2. **VPS próprio**: copie os arquivos, rode `node server.js` atrás de um processo gerenciado (ex.: `pm2 start server.js --name ponto-semeador`) e um proxy reverso (ex.: Nginx) com HTTPS na frente.
+
+### Configurando o disco persistente no Render
+
+1. No painel do serviço, vá em **Settings → Disks** (ou **Disks** no menu lateral) e clique em **Add Disk**.
+2. Dê um nome (ex.: `ponto-dados`), defina o **Mount Path** como `/var/data` e o tamanho (1 GB já é mais do que suficiente).
+3. Isso exige um plano pago (o disco persistente não está disponível no plano gratuito).
+4. Defina a variável de ambiente `DATA_DIR=/var/data` no serviço, apontando para o mesmo caminho do disco.
+5. Faça um novo deploy — a partir daí, o banco de dados vive no disco e sobrevive a reinícios e a novos deploys.
 
 Em produção, defina a variável de ambiente `SESSION_SECRET` (um texto longo e aleatório) para garantir que as sessões continuem válidas entre reinícios do servidor, e sirva o site sempre com **HTTPS** (essencial para proteger senhas e cookies de login).
 
