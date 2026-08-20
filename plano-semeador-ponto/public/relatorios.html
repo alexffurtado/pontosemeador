@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meus Relatorios - Plano Semeador</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%231f5c3f%27 d=%27M12 2C12 2 6 8.5 6 13.5C6 17.09 8.69 20 12 20C15.31 20 18 17.09 18 13.5C18 8.5 12 2 12 2Z%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="topo" id="topo-app"></header>
+
+  <main>
+    <h1 class="pagina-titulo">Meus relatorios<small>Consulte horas trabalhadas, atrasos e faltas por periodo.</small></h1>
+
+    <div class="card">
+      <div class="barra-filtros">
+        <div class="campo">
+          <label for="filtro-inicio">De</label>
+          <input type="date" id="filtro-inicio">
+        </div>
+        <div class="campo">
+          <label for="filtro-fim">Ate</label>
+          <input type="date" id="filtro-fim">
+        </div>
+        <div class="campo">
+          <label for="filtro-preset">Periodo rapido</label>
+          <select id="filtro-preset">
+            <option value="mes-atual">Mes atual</option>
+            <option value="mes-passado">Mes passado</option>
+            <option value="30dias" selected>Ultimos 30 dias</option>
+            <option value="7dias">Ultimos 7 dias</option>
+          </select>
+        </div>
+        <div class="acoes">
+          <button class="btn btn-secundario" id="btn-exportar-csv">Exportar CSV (Excel)</button>
+          <button class="btn btn-secundario" id="btn-exportar-pdf">Exportar PDF</button>
+          <button class="btn" id="btn-filtrar">Filtrar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grade-resumo" id="grade-resumo"></div>
+
+    <div class="card">
+      <div class="tabela-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th><th>Dia</th><th>Marcacoes</th><th>Horas</th><th>Situacao</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-corpo">
+            <tr><td colspan="5" class="carregando">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/relatorios.js"></script>
+</body>
+</html>
